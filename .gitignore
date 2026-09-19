@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Large local/raw artifacts (keep local, do not commit)
+mobile-network/
+outputs/internet_traffic_dataset.csv
+Formative1_Sep 2026.pdf

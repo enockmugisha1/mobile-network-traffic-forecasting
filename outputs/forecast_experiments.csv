@@ -1,0 +1,8 @@
+model,params,mae,rmse,mape,square_id
+random_forest,"{'n_estimators': 300, 'max_depth': 8, 'min_samples_leaf': 1}",58206.10465932717,68691.11608550453,50.34387593337745,5161
+random_forest,"{'n_estimators': 200, 'max_depth': None, 'min_samples_leaf': 1}",58868.90462692489,69789.60945931514,51.096504464272684,5161
+linear_regression,{},61879.76741628944,74287.58428565266,56.43681421382212,5161
+random_forest,"{'n_estimators': 400, 'max_depth': 10, 'min_samples_leaf': 2}",67996.13613752458,83991.70989090185,73.1203746514404,5161
+hist_gradient_boosting,"{'max_depth': 3, 'learning_rate': 0.05, 'max_iter': 250}",111964.52742438477,123746.51545566582,112.07963375098961,5161
+hist_gradient_boosting,"{'max_depth': 6, 'learning_rate': 0.03, 'max_iter': 400}",111964.52742438477,123746.51545566582,112.07963375098961,5161
+hist_gradient_boosting,"{'max_depth': 8, 'learning_rate': 0.05, 'max_iter': 500}",111964.52742438477,123746.51545566582,112.07963375098961,5161
