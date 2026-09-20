@@ -7,6 +7,8 @@ A comparative empirical study of sequential deep learning models for one-step-ah
 **Programme:** BSc Software Engineering (Machine Learning specialisation)
 **Assignment:** Formative 1 — Machine Learning, September 2026
 
+**Demo video:** https://youtu.be/7_Z0I7wF09M
+
 ---
 
 ## Overview
