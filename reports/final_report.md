@@ -26,9 +26,15 @@ traffic characteristics?*
 call_out, internet`. Rows with country code 39 (domestic Italian SIMs — the dominant share)
 are retained and their per-interval activity fields aggregated into a single traffic-intensity
 value per `(square_id, timestamp)`; internet activity dominates this quantity, so the series is
-effectively an internet-traffic-intensity measure. Aggregation is streamed file-by-file with
-column selection and dtype downcasting to keep peak RAM under ~3 GB (89,127,473 aggregated
-rows). See `src/data_pipeline.py`.
+effectively an internet-traffic-intensity measure (89,127,473 aggregated rows).
+
+**Memory management (two stages).** (1) *Streaming raw parse* — `data_pipeline.py` reads each
+daily file line-by-line, keeps only the three fields needed per row, and folds each file into
+running per-`(square, timestamp)` totals before the next file is opened, so the ~15 GB of raw
+text is never held in memory at once. (2) *Column-selected reload* — downstream scripts re-read
+the aggregated dataset via `timeseries.load_dataset`, which loads only the three required
+columns (`usecols`) and downcasts the traffic column to `float32` and identifiers to `int32`.
+Peak RAM stays under ~3 GB. See `src/data_pipeline.py` and `src/timeseries.py`.
 
 ## 3. Exploratory analysis (`src/eda.py`)
 - **Spatial distribution (Fig 1):** heavy right-tailed / approximately log-normal. Top areas
