@@ -5,5 +5,7 @@ __pycache__/
 
 # Large local/raw artifacts (keep local, do not commit)
 mobile-network/
-outputs/internet_traffic_dataset.csv
-Formative1_Sep 2026.pdf
+data/
+outputs/
+models/
+*.pdf
