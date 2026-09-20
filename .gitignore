@@ -3,9 +3,10 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
-# Large local/raw artifacts (keep local, do not commit)
+# Local/raw and oversized artifacts keep local only
 mobile-network/
 data/
-outputs/
-models/
 *.pdf
+
+# Keep the full processed dataset local to avoid pushing a multi-GB file
+outputs/internet_traffic_dataset.csv
