@@ -10,10 +10,10 @@ import torch
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from torch.utils.data import DataLoader, TensorDataset
 import torch.nn as nn
 
 from models import TCNForecaster
+from timeseries import make_windows, to_loader
 
 REPO    = Path(__file__).resolve().parents[1]
 CSV     = REPO / "outputs" / "internet_traffic_dataset.csv"
@@ -31,14 +31,6 @@ VAL_END   = "2013-12-15 23:50:00"
 
 torch.manual_seed(SEED)
 np.random.seed(SEED)
-
-
-def make_windows(values, seq_len):
-    X, y = [], []
-    for i in range(len(values) - seq_len):
-        X.append(values[i: i + seq_len])
-        y.append(values[i + seq_len])
-    return np.array(X, dtype=np.float32), np.array(y, dtype=np.float32)
 
 
 def main():
@@ -61,14 +53,8 @@ def main():
     Xtr, ytr = make_windows(train_s, SEQ_LEN)
     Xva, yva = make_windows(val_s,   SEQ_LEN)
 
-    def to_loader(X, y, shuffle):
-        Xt = torch.tensor(X).unsqueeze(-1)
-        yt = torch.tensor(y).unsqueeze(-1)
-        return DataLoader(TensorDataset(Xt, yt),
-                          batch_size=BATCH, shuffle=shuffle)
-
-    train_loader = to_loader(Xtr, ytr, True)
-    val_loader   = to_loader(Xva, yva, False)
+    train_loader = to_loader(Xtr, ytr, BATCH, True)
+    val_loader   = to_loader(Xva, yva, BATCH, False)
 
     model     = TCNForecaster(SEQ_LEN, num_channels=32, num_levels=4,
                                kernel_size=3, dropout=0.1)

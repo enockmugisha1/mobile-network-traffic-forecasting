@@ -12,12 +12,11 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.insert(0, str(Path(__file__).parent))
 from models import LSTMForecaster, TCNForecaster, TransformerForecaster
+from timeseries import load_dataset, load_square_series, prepare_minmax_split
 
 # ── config ────────────────────────────────────────────────────────────
 REPO       = Path(__file__).resolve().parents[1]
@@ -26,56 +25,15 @@ SQUARE_ID  = 5161
 SEQ_LEN    = 144
 BATCH      = 64
 SEED       = 42
-TRAIN_END  = "2013-12-08 23:50:00"
-VAL_START  = "2013-12-09 00:00:00"
-VAL_END    = "2013-12-15 23:50:00"
-TEST_START = "2013-12-16 00:00:00"
-TEST_END   = "2013-12-22 23:50:00"
 
 torch.manual_seed(SEED)
 np.random.seed(SEED)
 
 
 def load_and_split(df: pd.DataFrame):
-    s = (df[df["square_id"] == SQUARE_ID]
-         .set_index("timestamp")["internet_traffic"]
-         .sort_index())
-    full_idx = pd.date_range(s.index.min(), s.index.max(), freq="10min")
-    s = s.reindex(full_idx).ffill().fillna(0.0)
-
-    train_raw = s[:TRAIN_END].values.reshape(-1, 1)
-    val_raw   = s[VAL_START:VAL_END].values.reshape(-1, 1)
-    test_raw  = s[TEST_START:TEST_END].values.reshape(-1, 1)
-
-    scaler    = MinMaxScaler()
-    train_s   = scaler.fit_transform(train_raw).ravel()
-    val_s     = scaler.transform(val_raw).ravel()
-    test_s    = scaler.transform(test_raw).ravel()
-
-    def windows(v):
-        X, y = [], []
-        for i in range(len(v) - SEQ_LEN):
-            X.append(v[i:i+SEQ_LEN])
-            y.append(v[i+SEQ_LEN])
-        return np.array(X, np.float32), np.array(y, np.float32)
-
-    def loader(X, y, shuffle):
-        Xt = torch.tensor(X).unsqueeze(-1)
-        yt = torch.tensor(y).unsqueeze(-1)
-        return DataLoader(TensorDataset(Xt, yt),
-                          batch_size=BATCH, shuffle=shuffle)
-
-    Xtr, ytr = windows(train_s)
-    Xva, yva = windows(val_s)
-
-    pre_s  = scaler.transform(s[:VAL_END].values.reshape(-1,1)).ravel()
-    ctx_s  = np.concatenate([pre_s[-SEQ_LEN:], test_s])
-
-    return (loader(Xtr, ytr, True),
-            loader(Xva, yva, False),
-            ctx_s,
-            test_raw.ravel(),
-            scaler)
+    """Build the square-5161 series and its chronological MinMax split."""
+    series = load_square_series(df, SQUARE_ID)
+    return prepare_minmax_split(series, SEQ_LEN, BATCH)
 
 
 def run_one(model, train_loader, val_loader,
@@ -133,8 +91,7 @@ def run_one(model, train_loader, val_loader,
 
 def main():
     print("Loading data...")
-    df = pd.read_csv(CSV, parse_dates=["timestamp"],
-                     usecols=["square_id","timestamp","internet_traffic"])
+    df = load_dataset(CSV)
     (train_loader, val_loader,
      ctx_s, test_actual, scaler) = load_and_split(df)
 

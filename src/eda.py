@@ -25,6 +25,8 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.seasonal import STL
 from statsmodels.tsa.stattools import adfuller
 
+from timeseries import load_dataset, load_square_series as square_series
+
 REPO = Path(__file__).resolve().parents[1]
 CSV = REPO / "outputs" / "internet_traffic_dataset.csv"
 FIG_DIR = REPO / "outputs" / "figures"
@@ -34,17 +36,6 @@ TOP_SQUARE = 5161
 REFERENCE_SQUARES = [4159, 4556]      # additional areas required by the brief
 TWO_WEEK_START = "2013-11-01"
 TWO_WEEK_END = "2013-11-14 23:50:00"
-
-
-def load_dataset() -> pd.DataFrame:
-    df = pd.read_csv(CSV, parse_dates=["timestamp"], usecols=["square_id", "timestamp", "internet_traffic"])
-    return df
-
-
-def square_series(df: pd.DataFrame, square_id: int) -> pd.Series:
-    s = df[df["square_id"] == square_id].set_index("timestamp")["internet_traffic"].sort_index()
-    full_index = pd.date_range(s.index.min(), s.index.max(), freq="10min")
-    return s.reindex(full_index).ffill().fillna(0.0)
 
 
 def totals_by_square(df: pd.DataFrame) -> pd.Series:
@@ -143,7 +134,7 @@ def adf_test(series: pd.Series) -> None:
 def main() -> None:
     FIG_DIR.mkdir(parents=True, exist_ok=True)
     print("Loading dataset...")
-    df = load_dataset()
+    df = load_dataset(CSV)
 
     totals = totals_by_square(df)
     top_three = totals.head(3).index.tolist()

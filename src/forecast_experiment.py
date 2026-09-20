@@ -32,10 +32,15 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.preprocessing import MinMaxScaler
-from torch.utils.data import DataLoader, TensorDataset
 
 from models import LSTMForecaster, TCNForecaster, TransformerForecaster
+from timeseries import (
+    TEST_END,
+    TEST_START,
+    load_dataset,
+    load_square_series,
+    prepare_minmax_split,
+)
 
 # ── configuration ──────────────────────────────────────────────────────
 REPO = Path(__file__).resolve().parents[1]
@@ -50,12 +55,6 @@ EPOCHS = 30
 LR = 1e-3
 SEED = 42
 
-TRAIN_END = "2013-12-08 23:50:00"
-VAL_START = "2013-12-09 00:00:00"
-VAL_END = "2013-12-15 23:50:00"
-TEST_START = "2013-12-16 00:00:00"
-TEST_END = "2013-12-22 23:50:00"
-
 # Best configuration per model, selected during hyperparameter tuning
 # (see src/tune_experiment.py and outputs/tuning_results.csv). For all three
 # models the compact "baseline" configuration generalised best.
@@ -69,59 +68,6 @@ MODEL_BUILDERS = {
 
 torch.manual_seed(SEED)
 np.random.seed(SEED)
-
-
-def load_square_series(df: pd.DataFrame, square_id: int) -> pd.Series:
-    """Return the regular 10-minute series for one square (gaps forward-filled)."""
-    s = (
-        df[df["square_id"] == square_id]
-        .set_index("timestamp")["internet_traffic"]
-        .sort_index()
-    )
-    full_index = pd.date_range(s.index.min(), s.index.max(), freq="10min")
-    return s.reindex(full_index).ffill().fillna(0.0)
-
-
-def make_windows(values: np.ndarray, seq_len: int) -> tuple[np.ndarray, np.ndarray]:
-    X, y = [], []
-    for i in range(len(values) - seq_len):
-        X.append(values[i : i + seq_len])
-        y.append(values[i + seq_len])
-    return np.array(X, np.float32), np.array(y, np.float32)
-
-
-def to_loader(X: np.ndarray, y: np.ndarray, shuffle: bool) -> DataLoader:
-    Xt = torch.tensor(X).unsqueeze(-1)
-    yt = torch.tensor(y).unsqueeze(-1)
-    return DataLoader(TensorDataset(Xt, yt), batch_size=BATCH, shuffle=shuffle)
-
-
-def prepare_split(series: pd.Series):
-    """Chronological split + MinMax scaling fitted on the training data only."""
-    train_raw = series[:TRAIN_END].values.reshape(-1, 1)
-    val_raw = series[VAL_START:VAL_END].values.reshape(-1, 1)
-    test_raw = series[TEST_START:TEST_END].values.reshape(-1, 1)
-
-    scaler = MinMaxScaler()
-    train_s = scaler.fit_transform(train_raw).ravel()
-    val_s = scaler.transform(val_raw).ravel()
-    test_s = scaler.transform(test_raw).ravel()
-
-    Xtr, ytr = make_windows(train_s, SEQ_LEN)
-    Xva, yva = make_windows(val_s, SEQ_LEN)
-
-    # Context for the rolling forecast: the last SEQ_LEN scaled points before the
-    # test window, followed by the scaled test window itself.
-    pre_s = scaler.transform(series[:VAL_END].values.reshape(-1, 1)).ravel()
-    ctx_s = np.concatenate([pre_s[-SEQ_LEN:], test_s])
-
-    return (
-        to_loader(Xtr, ytr, True),
-        to_loader(Xva, yva, False),
-        ctx_s,
-        test_raw.ravel(),
-        scaler,
-    )
 
 
 def train_and_forecast(model, train_loader, val_loader, ctx_s, test_actual, scaler):
@@ -215,7 +161,7 @@ def plot_all(square_id, actual, preds_by_model, index):
 def main() -> None:
     FIG_DIR.mkdir(parents=True, exist_ok=True)
     print("Loading dataset...")
-    df = pd.read_csv(CSV, parse_dates=["timestamp"], usecols=["square_id", "timestamp", "internet_traffic"])
+    df = load_dataset(CSV)
 
     result_rows, timing_rows = [], []
     test_index = pd.date_range(TEST_START, TEST_END, freq="10min")
@@ -223,7 +169,7 @@ def main() -> None:
     for square_id in SQUARES:
         print(f"\n=== Square {square_id} ===")
         series = load_square_series(df, square_id)
-        train_loader, val_loader, ctx_s, test_actual, scaler = prepare_split(series)
+        train_loader, val_loader, ctx_s, test_actual, scaler = prepare_minmax_split(series, SEQ_LEN, BATCH)
         index = test_index[: len(test_actual)]
 
         preds_by_model = {}
