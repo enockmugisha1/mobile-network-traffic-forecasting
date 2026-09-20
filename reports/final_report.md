@@ -1,55 +1,81 @@
-# Milan Telecom Traffic Forecasting
+# Comparative Analysis of Sequential Models for Mobile Network Traffic Forecasting — Milan
 
-## Introduction
-This project studies urban telecommunication demand using the Milan Telecom Traffic 2013 dataset. The objective is to forecast Internet traffic intensity for the most active spatial cells and explain how traffic patterns evolve over time. The problem is practically relevant because accurate demand forecasting supports traffic engineering, capacity planning, and anomaly detection in mobile networks.
+**Author:** Enock Mugisha · African Leadership University, Kigali · ML Formative 1, September 2026
 
-## Related Work
-Prior network-focused forecasting studies often use time-series and machine-learning models that combine trend, weekly seasonality, and lag features. This project follows that convention by using a daily aggregation and lag-based regression features, while comparing a simple benchmark linear model with nonlinear tree-based learners. The chosen models reflect a common trade-off between interpretability and predictive flexibility for high-variance telecommunication data.
+> This markdown file mirrors the submitted report. The full formatted report with all
+> figures is the Google Doc / PDF submission. Figures referenced below live in
+> `outputs/figures/`.
 
-## Dataset and Data Preparation
-The raw dataset is stored in the `mobile-network/` directory as daily sparse TXT files. Each row includes a square identifier, a millisecond timestamp, an activity code, and numeric traffic features. Because the assignment focuses on Internet demand, only rows with `activity_code = 39` were retained. Numeric values in each retained row were summed to obtain a single traffic measure per square and timestamp. The resulting dataset was aggregated to a square-level time series and saved to `outputs/internet_traffic_dataset.csv`.
+## Abstract
+One-step-ahead internet-traffic forecasting is studied on the Telecom Italia Big Data
+Challenge (Milan) dataset. Three sequential deep-learning models — an LSTM, a Temporal
+Convolutional Network (TCN), and an encoder-only Transformer — are implemented, tuned, and
+evaluated on the three highest-traffic grid areas during the test week 16–22 December 2013.
+The TCN gives the best overall accuracy (MAPE 9.01% on the busiest area, 7.21% on the third),
+with the fewest parameters and fastest inference; the Transformer is weakest on every area,
+consistent with attention models being data-hungry on short univariate series.
 
-The data volume is large, so memory usage was controlled by parsing line-by-line and using integer-backed timestamps with compact numeric values. After aggregation, the top-square totals were inspected to identify the strongest forecasting targets. The highest-traffic square was `5161`, while `4159` and `4556` were also tracked as additional reference areas.
+## 1. Research question
+*How do different sequential models compare for one-step-ahead mobile network traffic
+forecasting, and how does their performance vary across geographical areas with different
+traffic characteristics?*
 
-## Exploratory Analysis
-The total traffic by square shows a highly skewed distribution, with a small number of cells carrying much of the network load. The highest totals are concentrated in a few squares, including 5161, 5059, and 5259. The first EDA plot summarizes this concentration, while the daily series plot shows strong temporal variation and recurring peaks that motivate lag-based forecasting.
+## 2. Dataset and data preparation
+62 daily tab-separated files, 10-minute resolution, 10,000 grid squares, 1 Nov 2013 – 1 Jan
+2014. Each raw row is `square_id, timestamp_ms, country_code, sms_in, sms_out, call_in,
+call_out, internet`. Rows with country code 39 (domestic Italian SIMs — the dominant share)
+are retained and their per-interval activity fields aggregated into a single traffic-intensity
+value per `(square_id, timestamp)`; internet activity dominates this quantity, so the series is
+effectively an internet-traffic-intensity measure. Aggregation is streamed file-by-file with
+column selection and dtype downcasting to keep peak RAM under ~3 GB (89,127,473 aggregated
+rows). See `src/data_pipeline.py`.
 
-| Rank | Square ID | Total Internet Traffic |
-|---|---:|---:|
-| 1 | 5161 | 14,614,418 |
-| 2 | 5059 | 13,680,137 |
-| 3 | 5259 | 12,259,581 |
-| 4 | 5061 | 11,228,350 |
-| 5 | 6064 | 10,658,021 |
+## 3. Exploratory analysis (`src/eda.py`)
+- **Spatial distribution (Fig 1):** heavy right-tailed / approximately log-normal. Top areas
+  are 5161 (12,740,060), 5059 (11,170,854), 5259 (10,485,780).
+- **Temporal dynamics (Fig 2):** squares 5161/5059/5259 show strong daily cycles and a
+  weekday/weekend pattern; reference squares 4159 and 4556 are lower and more irregular.
+- **Stationarity:** ADF statistic −14.8151 (p ≈ 0), stationary at 1% → no differencing needed
+  (`outputs/adf_results.txt`).
+- **STL (Fig 3):** seasonal strength 0.8592 (dominant daily cycle); slow downward trend into the
+  Christmas holiday.
+- **Autocorrelation (Fig 4):** ACF spike at lag 144 (1 day) and 288 (2 days); short-range PACF
+  → motivates a 144-step (24 h) input window.
 
-The selected reference areas also show substantial traffic levels: square `4159` registered 2,755,431 and square `4556` registered 5,310,022 total traffic units.
+## 4. Methodology (`src/models.py`, `src/forecast_experiment.py`)
+One-step-ahead task with sequence length L = 144. Strictly chronological split: train
+1 Nov–8 Dec, validation 9–15 Dec, test 16–22 Dec. Per-area MinMax scaling fitted on training
+only (no leakage). Rolling one-step forecast with the true value fed back as the next input.
+Adam, MSE loss, ReduceLROnPlateau, gradient clipping, 30 epochs, best-validation checkpoint,
+seed 42.
 
-## Methodology
-A daily traffic series was constructed for the highest-traffic square (`5161`) and several lag features were added (1, 2, 3, 7, 14, and 30 days) along with calendar indicators such as day-of-week and month. A time-ordered train/test split was used to preserve the temporal structure of the forecasting task. The experiment followed an iterative design: baseline linear regression was evaluated first, then tree-based models were tuned to improve nonlinear behavior.
+| Model | Key config | Params |
+|---|---|---|
+| LSTM | hidden 64, 2 layers, dropout 0.1 | 50,497 |
+| TCN | 32 ch, 4 levels, kernel 3, dilations 1-2-4-8 | 21,953 |
+| Transformer | d_model 32, 4 heads, 2 layers, ff 128 | 25,505 |
 
-The final methodology compares three models:
-- Linear Regression as the baseline benchmark.
-- Random Forest Regressor as a nonlinear ensemble model capturing local patterns.
-- HistGradientBoostingRegressor as a more flexible boosting approach.
+Five configurations per model were tuned on square 5161 (`src/tune_experiment.py`,
+`outputs/tuning_results.csv`); the compact baseline generalised best in every case — larger
+variants overfit the ~5,600 training windows.
 
-## Results and Discussion
-The experiment results for square 5161 are summarized below.
+## 5. Results (`outputs/forecast_results.csv`, `outputs/forecast_timing.csv`)
 
-| Model | MAE | RMSE | MAPE |
-|---|---:|---:|---:|
-| Random Forest (n=300, max_depth=8) | 58,206 | 68,691 | 50.34 |
-| Random Forest (n=200, max_depth=None) | 58,869 | 69,790 | 51.10 |
-| Linear Regression | 61,880 | 74,288 | 56.44 |
-| HistGradientBoostingRegressor | 111,965 | 123,747 | 112.08 |
+**Square 5161** — TCN 80.52 / 117.57 / 9.01% · LSTM 93.66 / 134.83 / 11.79% · Transformer 105.19 / 148.68 / 14.21%
+**Square 5059** — LSTM 75.65 / 104.18 / 8.58% · TCN 82.56 / 113.71 / 9.88% · Transformer 89.07 / 124.76 / 9.06%
+**Square 5259** — TCN 64.38 / 91.99 / 7.21% · LSTM 71.69 / 99.88 / 8.56% · Transformer 85.44 / 115.60 / 10.99%
+*(MAE / RMSE / MAPE)*
 
-The best-performing configuration was the random forest model, which achieved the lowest MAE and RMSE. This suggests the series contains nonlinear structure that a simple linear model cannot fully capture. However, the MAPE values remain relatively high, indicating that daily traffic fluctuations are difficult to forecast precisely in a long-horizon setting. The boosting model underperformed in this setup, likely due to the limited number of temporal samples and the need for stronger tuning or a more structured time-series feature set.
+TCN is best overall (lowest error on 2 of 3 areas, fewest params, fastest inference). LSTM wins
+on 5059. The Transformer trails everywhere and costs ~4× the training time. All models are worst
+on the busiest area (5161) and best on 5259 — forecasting difficulty tracks traffic complexity.
+Failure cases: all models underestimate the Monday 16 Dec morning surge and overestimate the
+pre-Christmas weekend drop (a once-in-dataset calendar anomaly).
 
-## Conclusion and Future Work
-The project demonstrates that the Milan telecom traffic series is dominated by a few highly active squares and that a nonlinear ensemble model outperforms the baseline linear benchmark for the selected forecasting target. The main limitation is that the model still struggles with variance and relative error, suggesting that stronger temporal features, longer lookback windows, or time-series-specific models may improve performance.
-
-Future work should extend the analysis to more than one square, add richer lag and seasonal features, and compare against more specialized time-series methods such as SARIMA or Prophet. Additional model tuning with cross-validation and a larger feature set would likely improve generalization and produce a more robust forecasting pipeline.
+## 6. Conclusion
+TCN offers the best accuracy/cost trade-off for this problem. Limitations: univariate, no spatial
+or calendar features, two-month window, CPU-only tuning. Future work: multivariate/spatial
+models, calendar features, longer history, probabilistic forecasts.
 
 ## References
-1. Kaggle: Milan Telecom Traffic 2013 dataset, accessed via the public Kaggle listing.
-2. Hyndman, R. and Athanasopoulos, G. Forecasting: Principles and Practice.
-3. Scikit-learn documentation for linear regression, random forest regression, and gradient boosting models.
+See the full report for the complete IEEE reference list [1]–[7].

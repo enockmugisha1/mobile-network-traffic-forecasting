@@ -75,7 +75,7 @@ Download: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/D
 | Raw rows total | ~319 million |
 | Aggregated rows | 89,127,473 |
 
-Column 2 in the raw files is the country code (39 = Italy, others = roaming). Internet traffic is column 7. All country codes are retained and summed to get total internet traffic per area and time slot.
+Column 2 in the raw files is the country code (39 = Italy, others = foreign roaming), not an activity type. Internet activity is column 7. Rows with country code 39 (domestic traffic — the dominant share) are retained, and the per-interval activity fields are aggregated into a single traffic-intensity value per (square_id, time slot). Because internet activity dominates this quantity by one to two orders of magnitude, the resulting series is effectively an internet-traffic-intensity measure, which is the forecasting target.
 
 The raw dataset files are not committed to this repository due to their size (~15 GB). Place the 62 daily .txt files inside a folder called mobile-network/ at the root of this repository.
 
@@ -87,7 +87,8 @@ mobile-network-traffic-forecasting/
 - mobile-network/            <- Raw dataset (download separately)
 - src/
   - data_pipeline.py         <- Raw file parser and aggregator
-  - eda.py                   <- Exploratory data analysis
+  - eda.py                   <- Exploratory analysis (fig1-4 + ADF stationarity test)
+  - tune_experiment.py       <- Hyperparameter tuning (5 configs/model on square 5161)
   - models.py                <- LSTM, TCN, Transformer definitions
   - forecast_experiment.py   <- Training, evaluation, plots
   - save_best_model.py       <- Save best model weights
@@ -99,8 +100,7 @@ mobile-network-traffic-forecasting/
   - best_model_tcn.pt
   - figures/                 <- All EDA and forecast plots
 - reports/
-  - final_report.md
-  - final_report.pdf
+  - final_report.md          <- Concise markdown mirror of the submitted report
 - requirements.txt
 - README.md
 
@@ -129,10 +129,14 @@ Step 1 - Parse raw dataset (~4 minutes)
 Step 2 - Exploratory analysis (~2 minutes)
     python src/eda.py
 
-Step 3 - Forecasting experiment (~45 minutes on CPU)
+Step 3 - Hyperparameter tuning (optional, documents the 5 configs/model)
+    python src/tune_experiment.py
+
+Step 4 - Forecasting experiment: train + evaluate LSTM/TCN/Transformer
+         on squares 5161/5059/5259 (~45 minutes on CPU)
     python src/forecast_experiment.py
 
-Step 4 - Save best model (optional, ~3 minutes)
+Step 5 - Save best model (optional, ~3 minutes)
     python src/save_best_model.py
 
 ---
