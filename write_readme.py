@@ -1,4 +1,4 @@
-# Mobile Network Traffic Forecasting — Milan
+readme = """# Mobile Network Traffic Forecasting — Milan
 
 A comparative empirical study of sequential deep learning models for one-step-ahead internet traffic forecasting using the Telecom Italia Big Data Challenge dataset.
 
@@ -163,3 +163,9 @@ Step 4 - Save best model (optional, ~3 minutes)
 2. S. Bai, J. Z. Kolter, and V. Koltun, An empirical evaluation of generic convolutional and recurrent networks for sequence modeling, arXiv:1803.01271, 2018.
 3. A. Vaswani et al., Attention is all you need, NeurIPS, 2017.
 4. G. Barlacchi et al., A multi-source dataset of urban life in the city of Milan, Scientific Data, vol. 2, p. 150055, 2015.
+"""
+
+with open("README.md", "w") as f:
+    f.write(readme)
+
+print("README.md saved successfully")
